@@ -1,6 +1,8 @@
+from tensorflow.python.estimator import keras
 from tensorflow.python.ops.image_ops_impl import ResizeMethod
 
-try:
+# try:
+if True:
     import tensorflow as tf
     import numpy as np
     import tensorflow_datasets as tfds
@@ -35,6 +37,18 @@ try:
         # print("start: " + str(mask))
         return image, mask
 
+    def read_test_image(image_file, mask_file):
+        image = tf.io.read_file(test_image_dir + image_file)
+        image = tf.image.decode_image(image, channels=3, expand_animations=False)
+        mask = tf.io.read_file(test_mask_dir + mask_file)
+        mask = tf.image.decode_image(mask, channels=3, expand_animations=False)
+        image = tf.convert_to_tensor(image)
+        mask = tf.convert_to_tensor(mask)
+        image = tf.image.resize(image, (224, 224), method=ResizeMethod.NEAREST_NEIGHBOR)
+        mask = tf.image.resize(mask, (224, 224), method=ResizeMethod.NEAREST_NEIGHBOR)
+        # print("start: " + str(mask))
+        return image, mask
+
 
     def display(display_list):
         plt.figure(figsize=(15, 15))
@@ -57,6 +71,8 @@ try:
 
     image_dir = 'Images/data2/train/rgb/'
     mask_dir = 'Images/data2/train/seg/'
+    test_image_dir = 'Images/preset_weather_data/rgb/'
+    test_mask_dir = 'Images/preset_weather_data/seg/'
     print("hi")
     image_paths = os.listdir(image_dir)
     mask_paths = os.listdir(mask_dir)
@@ -73,12 +89,12 @@ try:
     val_images = tf.data.Dataset.from_tensor_slices((image_val_paths, mask_val_paths))
     val_images = val_images.map(read_image, num_parallel_calls=tf.data.AUTOTUNE).map(normalize)
 
-    image_test_paths = os.listdir('Images/data2/test/rgb/')
-    mask_test_paths = os.listdir('Images/data2/test/seg/')
+    image_test_paths = os.listdir(test_image_dir)
+    mask_test_paths = os.listdir(test_mask_dir)
     image_test_paths.sort()
     mask_test_paths.sort()
     test_images = tf.data.Dataset.from_tensor_slices((image_test_paths, mask_test_paths))
-    test_images = test_images.map(read_image, num_parallel_calls=tf.data.AUTOTUNE).map(normalize)
+    test_images = test_images.map(read_test_image, num_parallel_calls=tf.data.AUTOTUNE).map(normalize)
 
     train_batches = (
         train_images
@@ -89,10 +105,11 @@ try:
         .prefetch(buffer_size=tf.data.AUTOTUNE))
 
     val_batches = val_images.batch(BATCH_SIZE)
+    test_batches = test_images.shuffle(BUFFER_SIZE).batch(BATCH_SIZE)
 
-    for images, masks in train_batches.take(1):
-        sample_image, sample_mask = images[0], masks[0]
-        display([sample_image, sample_mask])
+    # for images, masks in train_batches.take(1):
+    #     sample_image, sample_mask = images[0], masks[0]
+    #     display([sample_image, sample_mask])
 
     # MAKING THE MODEL
     base_model = tf.keras.applications.MobileNetV2(input_shape=[224, 224, 3], include_top=False)
@@ -145,7 +162,7 @@ try:
         return tf.keras.Model(inputs=inputs, outputs=x)
 
 
-    OUTPUT_CLASSES = 27
+    OUTPUT_CLASSES = 28
 
     model = unet_model(output_channels=OUTPUT_CLASSES)
 
@@ -167,15 +184,6 @@ try:
             for image, mask in dataset.take(num):
                 pred_mask = model.predict(image)
                 display([image[0], mask[0], create_mask(pred_mask)])
-        else:
-            predicted_mask = model.predict(sample_image[tf.newaxis, ...])
-            # print("pred mask shape: " + str(predicted_mask.shape))
-            # print("raw mask: " + str(predicted_mask))
-            # print("converted mask: " + str(create_mask(predicted_mask)))
-            # print(tf.reduce_min(create_mask(predicted_mask)))
-            # print(tf.reduce_max(create_mask(predicted_mask)))
-            display([sample_image, sample_mask,
-                     create_mask(predicted_mask)])
 
 
     class DisplayCallback(tf.keras.callbacks.Callback):
@@ -185,30 +193,35 @@ try:
             print('\nSample Prediction after epoch {}\n'.format(epoch + 1))
 
 
-    EPOCHS = 50
+    EPOCHS = 30
     VAL_SUBSPLITS = 5
     VALIDATION_STEPS = len(image_val_paths) // BATCH_SIZE // VAL_SUBSPLITS
 
-    model_history = model.fit(train_batches, epochs=EPOCHS,
-                              steps_per_epoch=STEPS_PER_EPOCH,
-                              validation_steps=VALIDATION_STEPS,
-                              validation_data=val_batches,
-                              callbacks=[DisplayCallback()])
-    show_predictions()
+    # model_history = model.fit(train_batches, epochs=EPOCHS,
+    #                           steps_per_epoch=STEPS_PER_EPOCH,
+    #                           validation_steps=VALIDATION_STEPS,
+    #                           validation_data=val_batches)
+    #                             # callbacks=[DisplayCallback()])
+    # model.save('models/30epochs.keras')
+    model = tf.keras.models.load_model('models/30epochs.keras')
+    # show_predictions()
+    for image, mask in test_batches.take(10):
+        pred_mask = model.predict(image)
+        display([image[0], mask[0], create_mask(pred_mask)])
 
-    loss = model_history.history['loss']
-    val_loss = model_history.history['val_loss']
-
-    plt.figure()
-    plt.plot(model_history.epoch, loss, 'r', label='Training loss')
-    plt.plot(model_history.epoch, val_loss, 'bo', label='Validation loss')
+    # loss = model_history.history['loss']
+    # val_loss = model_history.history['val_loss']
+    #
+    # plt.figure()
+    # plt.plot(model_history.epoch, loss, 'r', label='Training loss')
+    # plt.plot(model_history.epoch, val_loss, 'bo', label='Validation loss')
     plt.title('Training and fValidation Loss')
     plt.xlabel('Epoch')
     plt.ylabel('Loss Value')
     plt.ylim([0, 1])
     plt.legend()
     plt.show()
-except Exception as e:
-    with open('log.txt', 'a') as f:
-        f.write(str(e))
-        f.write(traceback.format_exc())
+# except Exception as e:
+#     with open('log.txt', 'a') as f:
+#         f.write(str(e))
+#         f.write(traceback.format_exc())
