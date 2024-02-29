@@ -1,3 +1,5 @@
+from tensorflow.python.ops.image_ops_impl import ResizeMethod
+
 try:
     import tensorflow as tf
     import numpy as np
@@ -14,7 +16,7 @@ try:
     def normalize(input_image, input_mask):  # normalize input and convert mask format
         # print("start: " + str(input_mask))
         # convert color
-        input_mask = input_mask[:, :, :1] - 1
+        input_mask = input_mask[:, :, :1]
         # normalize
         input_image = tf.cast(input_image, tf.float32) / 255.0
         # print("end: " + str(input_mask))
@@ -28,8 +30,8 @@ try:
         mask = tf.image.decode_image(mask, channels=3, expand_animations=False)
         image = tf.convert_to_tensor(image)
         mask = tf.convert_to_tensor(mask)
-        image = tf.image.resize(image, (224, 224))
-        mask = tf.image.resize(mask, (224, 224))
+        image = tf.image.resize(image, (224, 224), method=ResizeMethod.NEAREST_NEIGHBOR)
+        mask = tf.image.resize(mask, (224, 224), method=ResizeMethod.NEAREST_NEIGHBOR)
         # print("start: " + str(mask))
         return image, mask
 
@@ -67,16 +69,16 @@ try:
     mask_val_paths = mask_paths[VALIDATION_LENGTH:]
 
     train_images = tf.data.Dataset.from_tensor_slices((image_train_paths, mask_train_paths))
-    train_images = train_images.map(read_image).map(normalize)
+    train_images = train_images.map(read_image, num_parallel_calls=tf.data.AUTOTUNE).map(normalize)
     val_images = tf.data.Dataset.from_tensor_slices((image_val_paths, mask_val_paths))
-    val_images = val_images.map(read_image).map(normalize)
+    val_images = val_images.map(read_image, num_parallel_calls=tf.data.AUTOTUNE).map(normalize)
 
     image_test_paths = os.listdir('Images/data2/test/rgb/')
     mask_test_paths = os.listdir('Images/data2/test/seg/')
     image_test_paths.sort()
     mask_test_paths.sort()
     test_images = tf.data.Dataset.from_tensor_slices((image_test_paths, mask_test_paths))
-    test_images = test_images.map(read_image).map(normalize)
+    test_images = test_images.map(read_image, num_parallel_calls=tf.data.AUTOTUNE).map(normalize)
 
     train_batches = (
         train_images
@@ -109,14 +111,6 @@ try:
     down_stack = tf.keras.Model(inputs=base_model.input, outputs=base_model_outputs)
 
     down_stack.trainable = False
-
-    # up_stack = [
-    #     pix2pix.upsample(512, 3),  # 4x4 -> 8x8
-    #     pix2pix.upsample(256, 3),  # 8x8 -> 16x16
-    #     pix2pix.upsample(128, 3),  # 16x16 -> 32x32
-    #     pix2pix.upsample(64, 3),  # 32x32 -> 64x64
-    #     pix2pix.upsample(32, 3),  # 64x64 -> 128x128
-    # ]
 
     up_stack = [
         pix2pix.upsample(512, 3),  # 4x4 -> 8x8
