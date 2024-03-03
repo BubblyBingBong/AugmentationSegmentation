@@ -13,6 +13,7 @@ if True:
     import matplotlib.pyplot as plt
     import torch
     import traceback
+    import random
 
 
     def normalize(input_image, input_mask):  # normalize input and convert mask format
@@ -53,7 +54,7 @@ if True:
     def display(display_list):
         plt.figure(figsize=(15, 15))
 
-        title = ['Input Image', 'True Mask', 'Predicted Mask']
+        title = ['Input Image', 'True Mask', 'Predicted Mask', 'Predicted Mask Augmented']
 
         for i in range(len(display_list)):
             plt.subplot(1, len(display_list), i + 1)
@@ -62,40 +63,81 @@ if True:
             plt.axis('off')
         plt.show()
 
+    def generateMatrix():
+        mat = np.array([[np.random.normal(1, 0.2), 0, 0],
+                        [0, np.random.normal(1, 0.2), 0],
+                        [0, 0, np.random.normal(1, 0.2)]])
+        print(mat)
+        return mat
 
-    TRAIN_LENGTH = 800  # info.splits['train'].num_examples
+    def augment(img, mask):
+        img = tf.image.random_brightness(img, max_delta=0.3)
+        img = tf.image.random_hue(img, 0.4)
+        return img, mask
+
+        # A = generateMatrix()
+        # # img = cv2.cvtColor(cv2.imread(file, 1), cv2.COLOR_BGR2HLS)
+        # do_noise = random.randint(0, 1)
+        # if do_noise == 0:
+        #     print("noise")
+        # for x in range(img.shape[1]):
+        #     for y in range(img.shape[0]):d
+        #         pixel = img[y][x].T
+        #         img[y][x] = A @ pixel
+        #         #  img[y][x].assign(tf.linalg.matmul(A, [img[y][x]], transpose_b=True)[0])
+        #         if do_noise == 0:
+        #             noise_type = random.randint(1, 20)
+        #             if noise_type == 1:
+        #                 white = random.randint(0, 1)
+        #                 if white == 0:
+        #                     img[y][x] = [0, 0, 0]
+        #                 else:
+        #                     img[y][x] = [255, 255, 255]
+        #
+        # blur_type = random.randint(0, 1)
+        # if blur_type == 0:
+        #     img = cv2.blur(img, (3, 3))
+        #     print("blurred")
+        #
+        # return img
+
+
+    TRAIN_LENGTH = 1000  # info.splits['train'].num_examples
     VALIDATION_LENGTH = 200
     BATCH_SIZE = 50
     BUFFER_SIZE = 1000
     STEPS_PER_EPOCH = TRAIN_LENGTH // BATCH_SIZE
 
-    image_dir = 'Images/data2/train/rgb/'
-    mask_dir = 'Images/data2/train/seg/'
-    test_image_dir = 'Images/preset_weather_data/rgb/'
-    test_mask_dir = 'Images/preset_weather_data/seg/'
+    image_dir = 'Images/diverse_clear_weather/rgb/'
+    mask_dir = 'Images/diverse_clear_weather/seg/'
     print("hi")
     image_paths = os.listdir(image_dir)
     mask_paths = os.listdir(mask_dir)
     image_paths.sort()
+    image_paths.remove('.DS_Store')
     mask_paths.sort()
+    path_pairs = []  # all pairs of (image, mask)
+    TOTAL_PAIRS = len(mask_paths)
+    for i in range(TOTAL_PAIRS):
+        path_pairs.append([image_paths[i], mask_paths[i]])
+    random.shuffle(path_pairs)
+    train_path_pairs = np.array(path_pairs[:VALIDATION_LENGTH])
+    val_path_pairs = np.array(path_pairs[VALIDATION_LENGTH:])
 
-    image_train_paths = image_paths[:VALIDATION_LENGTH]
-    image_val_paths = image_paths[VALIDATION_LENGTH:]
-    mask_train_paths = mask_paths[:VALIDATION_LENGTH]
-    mask_val_paths = mask_paths[VALIDATION_LENGTH:]
-
-    train_images = tf.data.Dataset.from_tensor_slices((image_train_paths, mask_train_paths))
-    train_images = train_images.map(read_image, num_parallel_calls=tf.data.AUTOTUNE).map(normalize)
-    val_images = tf.data.Dataset.from_tensor_slices((image_val_paths, mask_val_paths))
+    train_images = tf.data.Dataset.from_tensor_slices((train_path_pairs[:, 0], train_path_pairs[:, 1]))
+    train_images = train_images.map(read_image, num_parallel_calls=tf.data.AUTOTUNE).map(augment).map(normalize) # only train images are augmented
+    val_images = tf.data.Dataset.from_tensor_slices((val_path_pairs[:, 0], val_path_pairs[:, 1]))
     val_images = val_images.map(read_image, num_parallel_calls=tf.data.AUTOTUNE).map(normalize)
-
+    #
+    test_image_dir = 'Images/preset_weather_data/rgb/'
+    test_mask_dir = 'Images/preset_weather_data/seg/'
     image_test_paths = os.listdir(test_image_dir)
     mask_test_paths = os.listdir(test_mask_dir)
     image_test_paths.sort()
     mask_test_paths.sort()
     test_images = tf.data.Dataset.from_tensor_slices((image_test_paths, mask_test_paths))
     test_images = test_images.map(read_test_image, num_parallel_calls=tf.data.AUTOTUNE).map(normalize)
-
+    #
     train_batches = (
         train_images
         .cache()
@@ -107,7 +149,7 @@ if True:
     val_batches = val_images.batch(BATCH_SIZE)
     test_batches = test_images.shuffle(BUFFER_SIZE).batch(BATCH_SIZE)
 
-    # for images, masks in train_batches.take(1):
+    # for images, masks in train_batches.take(5):
     #     sample_image, sample_mask = images[0], masks[0]
     #     display([sample_image, sample_mask])
 
@@ -162,7 +204,7 @@ if True:
         return tf.keras.Model(inputs=inputs, outputs=x)
 
 
-    OUTPUT_CLASSES = 28
+    OUTPUT_CLASSES = 29
 
     model = unet_model(output_channels=OUTPUT_CLASSES)
 
@@ -195,20 +237,25 @@ if True:
 
     EPOCHS = 30
     VAL_SUBSPLITS = 5
-    VALIDATION_STEPS = len(image_val_paths) // BATCH_SIZE // VAL_SUBSPLITS
+    VALIDATION_STEPS = len(val_path_pairs) // BATCH_SIZE // VAL_SUBSPLITS
 
     # model_history = model.fit(train_batches, epochs=EPOCHS,
     #                           steps_per_epoch=STEPS_PER_EPOCH,
     #                           validation_steps=VALIDATION_STEPS,
     #                           validation_data=val_batches)
     #                             # callbacks=[DisplayCallback()])
-    # model.save('models/30epochs.keras')
-    model = tf.keras.models.load_model('models/30epochs.keras')
+    # model.save('models/Towns1-7,10/30epochs_augmented.keras')
+    model1 = tf.keras.models.load_model('models/Towns1-7,10/30epochs.keras')
+    model2 = tf.keras.models.load_model('models/Towns1-7,10/30epochs_augmented.keras')
     # show_predictions()
-    for image, mask in test_batches.take(10):
-        pred_mask = model.predict(image)
-        display([image[0], mask[0], create_mask(pred_mask)])
-
+    # for image, mask in test_batches.take(1):
+    #     pred_mask1 = model1.predict(image)
+    #     pred_mask2 = model2.predict(image)
+    #     display([image[0], mask[0], create_mask(pred_mask1), create_mask(pred_mask2)])
+    print("Clear Weather Data Only")
+    result1 = model1.evaluate(test_batches)
+    print("Augmented Clear Weather Data")
+    result2 = model2.evaluate(test_batches)
     # loss = model_history.history['loss']
     # val_loss = model_history.history['val_loss']
     #
