@@ -1,26 +1,33 @@
-from tensorflow.python.estimator import keras
 from tensorflow.python.ops.image_ops_impl import ResizeMethod
+import albumentations as A
+import tensorflow as tf
+import numpy as np
+from tensorflow_examples.models.pix2pix import pix2pix
+import os
+from IPython.display import clear_output
+import matplotlib.pyplot as plt
+import random
+
 
 # try:
 if True:
-    import tensorflow as tf
-    import numpy as np
-    import tensorflow_datasets as tfds
-    from tensorflow_examples.models.pix2pix import pix2pix
-    import cv2
-    import os
-    from IPython.display import clear_output
-    import matplotlib.pyplot as plt
-    import torch
-    import traceback
-    import random
+    def normalize_augment(input_image, input_mask):  # normalize input and convert mask format
+        # print("start: " + str(input_mask))
+        # convert color
+        input_mask = input_mask[:, :, :1]
+        # normalize
 
+        input_image = tf.numpy_function(augment_func, inp=[input_image], Tout=tf.float32)
+        input_image = tf.cast(input_image, tf.float32) / 255.0
+        # print("end: " + str(input_mask))
+        return input_image, input_mask
 
     def normalize(input_image, input_mask):  # normalize input and convert mask format
         # print("start: " + str(input_mask))
         # convert color
         input_mask = input_mask[:, :, :1]
         # normalize
+
         input_image = tf.cast(input_image, tf.float32) / 255.0
         # print("end: " + str(input_mask))
         return input_image, input_mask
@@ -38,6 +45,7 @@ if True:
         # print("start: " + str(mask))
         return image, mask
 
+
     def read_test_image(image_file, mask_file):
         image = tf.io.read_file(test_image_dir + image_file)
         image = tf.image.decode_image(image, channels=3, expand_animations=False)
@@ -54,7 +62,7 @@ if True:
     def display(display_list):
         plt.figure(figsize=(15, 15))
 
-        title = ['Input Image', 'True Mask', 'Predicted Mask', 'Predicted Mask Augmented']
+        title = ['Input Image', 'True Mask', 'Clear Data', 'Clear Augmented', 'Weather Data']
 
         for i in range(len(display_list)):
             plt.subplot(1, len(display_list), i + 1)
@@ -62,6 +70,21 @@ if True:
             plt.imshow(tf.keras.utils.array_to_img(display_list[i]))
             plt.axis('off')
         plt.show()
+
+
+    def augment_func(img):
+        # img = tf.image.random_brightness(img, max_delta=0.2)
+        # img = tf.image.random_hue(img, 0.4)
+
+        transform = A.Compose(
+            [A.RandomRain(brightness_coefficient=0.9, drop_width=1, blur_value=3, p=0.5),
+             A.RandomSunFlare(src_radius=150, flare_roi=(0, 0, 1, 0.5), angle_lower=0.5, p=0.5),
+             A.RandomFog(fog_coef_lower=0.4, fog_coef_upper=0.5, alpha_coef=0.1, p=0.5),
+             A.RGBShift(r_shift_limit=50, g_shift_limit=50, b_shift_limit=50, p=0.5),
+             A.RandomGamma(gamma_limit=(80, 500), p=0.5)
+             ])
+        img = transform(image=img)['image']
+        return img.astype(np.float32)
 
     def generateMatrix():
         mat = np.array([[np.random.normal(1, 0.2), 0, 0],
@@ -108,13 +131,16 @@ if True:
     BUFFER_SIZE = 1000
     STEPS_PER_EPOCH = TRAIN_LENGTH // BATCH_SIZE
 
-    image_dir = 'Images/diverse_weather_data/rgb/'
-    mask_dir = 'Images/diverse_weather_data/seg/'
+    image_dir = 'Images/diverse_clear_weather/rgb/'
+    mask_dir = 'Images/diverse_clear_weather/seg/'
     print("hi")
     image_paths = os.listdir(image_dir)
     mask_paths = os.listdir(mask_dir)
     image_paths.sort()
     mask_paths.sort()
+    image_paths.remove('.DS_Store')
+    print(image_paths)
+    print(mask_paths)
     path_pairs = []  # all pairs of (image, mask)
     TOTAL_PAIRS = len(mask_paths)
     for i in range(TOTAL_PAIRS):
@@ -124,12 +150,12 @@ if True:
     train_path_pairs = np.array(path_pairs[VALIDATION_LENGTH:])
 
     train_images = tf.data.Dataset.from_tensor_slices((train_path_pairs[:, 0], train_path_pairs[:, 1]))
-    train_images = train_images.map(read_image, num_parallel_calls=tf.data.AUTOTUNE).map(normalize) # only train images are augmented
+    train_images = train_images.map(read_image, num_parallel_calls=tf.data.AUTOTUNE).map(normalize_augment)  # only train images are augmented
     val_images = tf.data.Dataset.from_tensor_slices((val_path_pairs[:, 0], val_path_pairs[:, 1]))
     val_images = val_images.map(read_image, num_parallel_calls=tf.data.AUTOTUNE).map(normalize)
     #
-    test_image_dir = 'Images/preset_weather_data/rgb/'
-    test_mask_dir = 'Images/preset_weather_data/seg/'
+    test_image_dir = 'Images/diverse_weather_data/rgb/'
+    test_mask_dir = 'Images/diverse_weather_data/seg/'
     image_test_paths = os.listdir(test_image_dir)
     mask_test_paths = os.listdir(test_mask_dir)
     image_test_paths.sort()
@@ -238,36 +264,35 @@ if True:
     EPOCHS = 50
     VALIDATION_STEPS = VALIDATION_LENGTH // BATCH_SIZE
     show_predictions()
-    model_history = model.fit(train_batches, epochs=EPOCHS,
-                              steps_per_epoch=TRAIN_LENGTH // BATCH_SIZE,
-                              validation_steps=VALIDATION_STEPS,
-                              validation_data=val_batches)
-                                # callbacks=[DisplayCallback()])
-    model.save('models/Towns1-7,10/50epochs_weather.keras')  # rain/fog/night
-    # model1 = tf.keras.models.load_model('models/Towns1-7,10/30epochs.keras')
-    # model2 = tf.keras.models.load_model('models/Towns1-7,10/30epochs_augmented.keras')
-    # model3 = tf.keras.models.load_model('models/Towns1-7,10/30epochs_albumentation.keras')
-    # model4 = tf.keras.models.load_model('models/Towns1-7,10/30epochs_weather.keras')
-    # show_predictions()
-    # for image, mask in test_batches.take(10):
+    # model_history = model.fit(train_batches, epochs=EPOCHS,
+    #                           steps_per_epoch=TRAIN_LENGTH // BATCH_SIZE,
+    #                           validation_steps=VALIDATION_STEPS,
+    #                           validation_data=val_batches)
+    #                             # callbacks=[DisplayCallback()])
+    # model.save('models/Towns1-7,10/50epochs_weather.keras')
+    model1 = tf.keras.models.load_model('models/Towns1-7,10/50epochs.keras')
+    model2 = tf.keras.models.load_model('models/Towns1-7,10/50epochs_albumentation.keras')
+    model3 = tf.keras.models.load_model('models/Towns1-7,10/30epochs_weather.keras')
+    # # show_predictions()
+    # for image, mask in test_batches.take(1):
     #     pred_mask1 = model1.predict(image)
-    #     pred_mask2 = model4.predict(image)
-    #     display([image[0], mask[0], create_mask(pred_mask1), create_mask(pred_mask2)])
-    # print("Clear Data")
-    # model1.evaluate(test_batches)
-    # print("Simple Augmented Data")
-    # model2.evaluate(test_batches)
-    # print("Albumentation Augmented Data")
-    # model3.evaluate(test_batches)
-    # print("Weather Data")
+    #     pred_mask2 = model2.predict(image)
+    #     pred_mask3 = model3.predict(image)
+    #     display([image[0], mask[0], create_mask(pred_mask1), create_mask(pred_mask2), create_mask(pred_mask3)])
+    print("Clear Data")
+    model1.evaluate(test_batches)
+    print("Albumentation Augmented Data")
+    model2.evaluate(test_batches)
+    print("Weather Data")
+    model3.evaluate(test_batches)
     # model4.evaluate(test_batches)
-    loss = model_history.history['loss']
-    val_loss = model_history.history['val_loss']
-
-    plt.figure()
-    plt.plot(model_history.epoch, loss, 'r', label='Training loss')
-    plt.plot(model_history.epoch, val_loss, 'bo', label='Validation loss')
-    plt.title('Training and fValidation Loss')
+    # loss = model_history.history['loss']
+    # val_loss = model_history.history['val_loss']
+    #
+    # plt.figure()
+    # plt.plot(model_history.epoch, loss, 'r', label='Training loss')
+    # plt.plot(model_history.epoch, val_loss, 'bo', label='Validation loss')
+    plt.title('Training and Validation Loss')
     plt.xlabel('Epoch')
     plt.ylabel('Loss Value')
     plt.ylim([0, 1])
