@@ -108,24 +108,23 @@ if True:
     BUFFER_SIZE = 1000
     STEPS_PER_EPOCH = TRAIN_LENGTH // BATCH_SIZE
 
-    image_dir = 'Images/diverse_clear_weather/rgb/'
-    mask_dir = 'Images/diverse_clear_weather/seg/'
+    image_dir = 'Images/diverse_weather_data/rgb/'
+    mask_dir = 'Images/diverse_weather_data/seg/'
     print("hi")
     image_paths = os.listdir(image_dir)
     mask_paths = os.listdir(mask_dir)
     image_paths.sort()
-    image_paths.remove('.DS_Store')
     mask_paths.sort()
     path_pairs = []  # all pairs of (image, mask)
     TOTAL_PAIRS = len(mask_paths)
     for i in range(TOTAL_PAIRS):
         path_pairs.append([image_paths[i], mask_paths[i]])
     random.shuffle(path_pairs)
-    train_path_pairs = np.array(path_pairs[:VALIDATION_LENGTH])
-    val_path_pairs = np.array(path_pairs[VALIDATION_LENGTH:])
+    val_path_pairs = np.array(path_pairs[:VALIDATION_LENGTH])
+    train_path_pairs = np.array(path_pairs[VALIDATION_LENGTH:])
 
     train_images = tf.data.Dataset.from_tensor_slices((train_path_pairs[:, 0], train_path_pairs[:, 1]))
-    train_images = train_images.map(read_image, num_parallel_calls=tf.data.AUTOTUNE).map(augment).map(normalize) # only train images are augmented
+    train_images = train_images.map(read_image, num_parallel_calls=tf.data.AUTOTUNE).map(normalize) # only train images are augmented
     val_images = tf.data.Dataset.from_tensor_slices((val_path_pairs[:, 0], val_path_pairs[:, 1]))
     val_images = val_images.map(read_image, num_parallel_calls=tf.data.AUTOTUNE).map(normalize)
     #
@@ -146,12 +145,13 @@ if True:
         .repeat()
         .prefetch(buffer_size=tf.data.AUTOTUNE))
 
-    val_batches = val_images.batch(BATCH_SIZE)
+    val_batches = val_images.batch(BATCH_SIZE).repeat()
     test_batches = test_images.shuffle(BUFFER_SIZE).batch(BATCH_SIZE)
-
-    # for images, masks in train_batches.take(5):
-    #     sample_image, sample_mask = images[0], masks[0]
-    #     display([sample_image, sample_mask])
+    print("train images: " + str(len(train_images)))
+    print("val images: " + str(len(val_images)))
+    for images, masks in train_batches.take(5):
+        sample_image, sample_mask = images[0], masks[0]
+        display([sample_image, sample_mask])
 
     # MAKING THE MODEL
     base_model = tf.keras.applications.MobileNetV2(input_shape=[224, 224, 3], include_top=False)
@@ -235,33 +235,38 @@ if True:
             print('\nSample Prediction after epoch {}\n'.format(epoch + 1))
 
 
-    EPOCHS = 30
-    VAL_SUBSPLITS = 5
-    VALIDATION_STEPS = len(val_path_pairs) // BATCH_SIZE // VAL_SUBSPLITS
-
-    # model_history = model.fit(train_batches, epochs=EPOCHS,
-    #                           steps_per_epoch=STEPS_PER_EPOCH,
-    #                           validation_steps=VALIDATION_STEPS,
-    #                           validation_data=val_batches)
-    #                             # callbacks=[DisplayCallback()])
-    # model.save('models/Towns1-7,10/30epochs_augmented.keras')
-    model1 = tf.keras.models.load_model('models/Towns1-7,10/30epochs.keras')
-    model2 = tf.keras.models.load_model('models/Towns1-7,10/30epochs_augmented.keras')
+    EPOCHS = 50
+    VALIDATION_STEPS = VALIDATION_LENGTH // BATCH_SIZE
+    show_predictions()
+    model_history = model.fit(train_batches, epochs=EPOCHS,
+                              steps_per_epoch=TRAIN_LENGTH // BATCH_SIZE,
+                              validation_steps=VALIDATION_STEPS,
+                              validation_data=val_batches)
+                                # callbacks=[DisplayCallback()])
+    model.save('models/Towns1-7,10/50epochs_weather.keras')  # rain/fog/night
+    # model1 = tf.keras.models.load_model('models/Towns1-7,10/30epochs.keras')
+    # model2 = tf.keras.models.load_model('models/Towns1-7,10/30epochs_augmented.keras')
+    # model3 = tf.keras.models.load_model('models/Towns1-7,10/30epochs_albumentation.keras')
+    # model4 = tf.keras.models.load_model('models/Towns1-7,10/30epochs_weather.keras')
     # show_predictions()
-    # for image, mask in test_batches.take(1):
+    # for image, mask in test_batches.take(10):
     #     pred_mask1 = model1.predict(image)
-    #     pred_mask2 = model2.predict(image)
+    #     pred_mask2 = model4.predict(image)
     #     display([image[0], mask[0], create_mask(pred_mask1), create_mask(pred_mask2)])
-    print("Clear Weather Data Only")
-    result1 = model1.evaluate(test_batches)
-    print("Augmented Clear Weather Data")
-    result2 = model2.evaluate(test_batches)
-    # loss = model_history.history['loss']
-    # val_loss = model_history.history['val_loss']
-    #
-    # plt.figure()
-    # plt.plot(model_history.epoch, loss, 'r', label='Training loss')
-    # plt.plot(model_history.epoch, val_loss, 'bo', label='Validation loss')
+    # print("Clear Data")
+    # model1.evaluate(test_batches)
+    # print("Simple Augmented Data")
+    # model2.evaluate(test_batches)
+    # print("Albumentation Augmented Data")
+    # model3.evaluate(test_batches)
+    # print("Weather Data")
+    # model4.evaluate(test_batches)
+    loss = model_history.history['loss']
+    val_loss = model_history.history['val_loss']
+
+    plt.figure()
+    plt.plot(model_history.epoch, loss, 'r', label='Training loss')
+    plt.plot(model_history.epoch, val_loss, 'bo', label='Validation loss')
     plt.title('Training and fValidation Loss')
     plt.xlabel('Epoch')
     plt.ylabel('Loss Value')
