@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import random
 
 
+
 # try:
 if True:
     def normalize_augment(input_image, input_mask):  # normalize input and convert mask format
@@ -136,9 +137,9 @@ if True:
     print("hi")
     image_paths = os.listdir(image_dir)
     mask_paths = os.listdir(mask_dir)
+    image_paths.remove('.DS_Store')
     image_paths.sort()
     mask_paths.sort()
-    image_paths.remove('.DS_Store')
     print(image_paths)
     print(mask_paths)
     path_pairs = []  # all pairs of (image, mask)
@@ -175,7 +176,9 @@ if True:
     test_batches = test_images.shuffle(BUFFER_SIZE).batch(BATCH_SIZE)
     print("train images: " + str(len(train_images)))
     print("val images: " + str(len(val_images)))
-    for images, masks in train_batches.take(5):
+
+    tf.random.set_seed(3)
+    for images, masks in train_batches.take(10):
         sample_image, sample_mask = images[0], masks[0]
         display([sample_image, sample_mask])
 
@@ -264,34 +267,27 @@ if True:
     EPOCHS = 50
     VALIDATION_STEPS = VALIDATION_LENGTH // BATCH_SIZE
     show_predictions()
-    # model_history = model.fit(train_batches, epochs=EPOCHS,
-    #                           steps_per_epoch=TRAIN_LENGTH // BATCH_SIZE,
-    #                           validation_steps=VALIDATION_STEPS,
-    #                           validation_data=val_batches)
-    #                             # callbacks=[DisplayCallback()])
-    # model.save('models/Towns1-7,10/50epochs_weather.keras')
-    model1 = tf.keras.models.load_model('models/Towns1-7,10/50epochs.keras')
-    model2 = tf.keras.models.load_model('models/Towns1-7,10/50epochs_albumentation.keras')
-    model3 = tf.keras.models.load_model('models/Towns1-7,10/30epochs_weather.keras')
+    model_history = model.fit(train_batches, epochs=EPOCHS,
+                              steps_per_epoch=TRAIN_LENGTH // BATCH_SIZE,
+                              validation_steps=VALIDATION_STEPS,
+                              validation_data=val_batches)
+                                # callbacks=[DisplayCallback()])
+    model.save('models/Towns1-7,10/50epochs_weather.keras')
+
+    # model3 = tf.keras.models.load_model('models/Towns1-7,10/30epochs_weather.keras')
     # # show_predictions()
     # for image, mask in test_batches.take(1):
     #     pred_mask1 = model1.predict(image)
     #     pred_mask2 = model2.predict(image)
     #     pred_mask3 = model3.predict(image)
     #     display([image[0], mask[0], create_mask(pred_mask1), create_mask(pred_mask2), create_mask(pred_mask3)])
-    print("Clear Data")
-    model1.evaluate(test_batches)
-    print("Albumentation Augmented Data")
-    model2.evaluate(test_batches)
-    print("Weather Data")
-    model3.evaluate(test_batches)
-    # model4.evaluate(test_batches)
-    # loss = model_history.history['loss']
-    # val_loss = model_history.history['val_loss']
-    #
-    # plt.figure()
-    # plt.plot(model_history.epoch, loss, 'r', label='Training loss')
-    # plt.plot(model_history.epoch, val_loss, 'bo', label='Validation loss')
+
+    loss = model_history.history['loss']
+    val_loss = model_history.history['val_loss']
+
+    plt.figure()
+    plt.plot(model_history.epoch, loss, 'r', label='Training loss')
+    plt.plot(model_history.epoch, val_loss, 'bo', label='Validation loss')
     plt.title('Training and Validation Loss')
     plt.xlabel('Epoch')
     plt.ylabel('Loss Value')
