@@ -1,3 +1,4 @@
+from sympy import Integer
 from tensorflow.python.ops.image_ops_impl import ResizeMethod
 import albumentations as A
 import tensorflow as tf
@@ -7,8 +8,6 @@ import os
 from IPython.display import clear_output
 import matplotlib.pyplot as plt
 import random
-
-
 
 # try:
 if True:
@@ -22,6 +21,7 @@ if True:
         input_image = tf.cast(input_image, tf.float32) / 255.0
         # print("end: " + str(input_mask))
         return input_image, input_mask
+
 
     def normalize(input_image, input_mask):  # normalize input and convert mask format
         # print("start: " + str(input_mask))
@@ -74,9 +74,6 @@ if True:
 
 
     def augment_func(img):
-        # img = tf.image.random_brightness(img, max_delta=0.2)
-        # img = tf.image.random_hue(img, 0.4)
-
         transform = A.Compose(
             [A.RandomRain(brightness_coefficient=0.9, drop_width=1, blur_value=3, p=0.5),
              A.RandomSunFlare(src_radius=150, flare_roi=(0, 0, 1, 0.5), angle_lower=0.5, p=0.5),
@@ -87,126 +84,11 @@ if True:
         img = transform(image=img)['image']
         return img.astype(np.float32)
 
-    def generateMatrix():
-        mat = np.array([[np.random.normal(1, 0.2), 0, 0],
-                        [0, np.random.normal(1, 0.2), 0],
-                        [0, 0, np.random.normal(1, 0.2)]])
-        print(mat)
-        return mat
 
     def augment(img, mask):
         img = tf.image.random_brightness(img, max_delta=0.3)
         img = tf.image.random_hue(img, 0.4)
         return img, mask
-
-        # A = generateMatrix()
-        # # img = cv2.cvtColor(cv2.imread(file, 1), cv2.COLOR_BGR2HLS)
-        # do_noise = random.randint(0, 1)
-        # if do_noise == 0:
-        #     print("noise")
-        # for x in range(img.shape[1]):
-        #     for y in range(img.shape[0]):d
-        #         pixel = img[y][x].T
-        #         img[y][x] = A @ pixel
-        #         #  img[y][x].assign(tf.linalg.matmul(A, [img[y][x]], transpose_b=True)[0])
-        #         if do_noise == 0:
-        #             noise_type = random.randint(1, 20)
-        #             if noise_type == 1:
-        #                 white = random.randint(0, 1)
-        #                 if white == 0:
-        #                     img[y][x] = [0, 0, 0]
-        #                 else:
-        #                     img[y][x] = [255, 255, 255]
-        #
-        # blur_type = random.randint(0, 1)
-        # if blur_type == 0:
-        #     img = cv2.blur(img, (3, 3))
-        #     print("blurred")
-        #
-        # return img
-
-
-    TRAIN_LENGTH = 1000  # info.splits['train'].num_examples
-    VALIDATION_LENGTH = 200
-    BATCH_SIZE = 50
-    BUFFER_SIZE = 1000
-    STEPS_PER_EPOCH = TRAIN_LENGTH // BATCH_SIZE
-
-    image_dir = 'Images/diverse_clear_weather/rgb/'
-    mask_dir = 'Images/diverse_clear_weather/seg/'
-    print("hi")
-    image_paths = os.listdir(image_dir)
-    mask_paths = os.listdir(mask_dir)
-    image_paths.remove('.DS_Store')
-    image_paths.sort()
-    mask_paths.sort()
-    print(image_paths)
-    print(mask_paths)
-    path_pairs = []  # all pairs of (image, mask)
-    TOTAL_PAIRS = len(mask_paths)
-    for i in range(TOTAL_PAIRS):
-        path_pairs.append([image_paths[i], mask_paths[i]])
-    random.shuffle(path_pairs)
-    val_path_pairs = np.array(path_pairs[:VALIDATION_LENGTH])
-    train_path_pairs = np.array(path_pairs[VALIDATION_LENGTH:])
-
-    train_images = tf.data.Dataset.from_tensor_slices((train_path_pairs[:, 0], train_path_pairs[:, 1]))
-    train_images = train_images.map(read_image, num_parallel_calls=tf.data.AUTOTUNE).map(normalize_augment)  # only train images are augmented
-    val_images = tf.data.Dataset.from_tensor_slices((val_path_pairs[:, 0], val_path_pairs[:, 1]))
-    val_images = val_images.map(read_image, num_parallel_calls=tf.data.AUTOTUNE).map(normalize)
-    #
-    test_image_dir = 'Images/diverse_weather_data/rgb/'
-    test_mask_dir = 'Images/diverse_weather_data/seg/'
-    image_test_paths = os.listdir(test_image_dir)
-    mask_test_paths = os.listdir(test_mask_dir)
-    image_test_paths.sort()
-    mask_test_paths.sort()
-    test_images = tf.data.Dataset.from_tensor_slices((image_test_paths, mask_test_paths))
-    test_images = test_images.map(read_test_image, num_parallel_calls=tf.data.AUTOTUNE).map(normalize)
-    #
-    train_batches = (
-        train_images
-        .cache()
-        .shuffle(BUFFER_SIZE)
-        .batch(BATCH_SIZE)
-        .repeat()
-        .prefetch(buffer_size=tf.data.AUTOTUNE))
-
-    val_batches = val_images.batch(BATCH_SIZE).repeat()
-    test_batches = test_images.shuffle(BUFFER_SIZE).batch(BATCH_SIZE)
-    print("train images: " + str(len(train_images)))
-    print("val images: " + str(len(val_images)))
-
-    tf.random.set_seed(3)
-    for images, masks in train_batches.take(10):
-        sample_image, sample_mask = images[0], masks[0]
-        display([sample_image, sample_mask])
-
-    # MAKING THE MODEL
-    base_model = tf.keras.applications.MobileNetV2(input_shape=[224, 224, 3], include_top=False)
-
-    # Use the activations of these layers
-    layer_names = [
-        'block_1_expand_relu',  # 64x64
-        'block_3_expand_relu',  # 32x32
-        'block_6_expand_relu',  # 16x16
-        'block_13_expand_relu',  # 8x8
-        'block_16_project',  # 4x4
-    ]
-    base_model_outputs = [base_model.get_layer(name).output for name in layer_names]
-
-    # Create the feature extraction model
-    down_stack = tf.keras.Model(inputs=base_model.input, outputs=base_model_outputs)
-
-    down_stack.trainable = False
-
-    up_stack = [
-        pix2pix.upsample(512, 3),  # 4x4 -> 8x8
-        pix2pix.upsample(256, 3),  # 8x8 -> 16x16
-        pix2pix.upsample(128, 3),  # 16x16 -> 32x32
-        pix2pix.upsample(64, 3),  # 32x32 -> 64x64
-        pix2pix.upsample(32, 3),  # 16x16 -> 32x32
-    ]
 
 
     def unet_model(output_channels: int):
@@ -233,17 +115,6 @@ if True:
         return tf.keras.Model(inputs=inputs, outputs=x)
 
 
-    OUTPUT_CLASSES = 29
-
-    model = unet_model(output_channels=OUTPUT_CLASSES)
-
-    model.compile(optimizer='adam',
-                  loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-                  metrics=['accuracy'])
-
-    tf.keras.utils.plot_model(model, show_shapes=True)
-
-
     def create_mask(pred_mask):
         pred_mask = tf.math.argmax(pred_mask, axis=-1)
         pred_mask = pred_mask[..., tf.newaxis]
@@ -264,36 +135,124 @@ if True:
             print('\nSample Prediction after epoch {}\n'.format(epoch + 1))
 
 
-    EPOCHS = 50
-    VALIDATION_STEPS = VALIDATION_LENGTH // BATCH_SIZE
-    show_predictions()
-    model_history = model.fit(train_batches, epochs=EPOCHS,
-                              steps_per_epoch=TRAIN_LENGTH // BATCH_SIZE,
-                              validation_steps=VALIDATION_STEPS,
-                              validation_data=val_batches)
-                                # callbacks=[DisplayCallback()])
-    model.save('models/Towns1-7,10/50epochs_weather.keras')
+    TRAIN_LENGTH = 1000
+    VALIDATION_LENGTH = 200
+    CV_SPLITS = 10
+    SPLIT_LENGTH = int((VALIDATION_LENGTH + TRAIN_LENGTH) / CV_SPLITS)
+    BATCH_SIZE = 50
+    BUFFER_SIZE = 1000
+    STEPS_PER_EPOCH = TRAIN_LENGTH // BATCH_SIZE
 
-    # model3 = tf.keras.models.load_model('models/Towns1-7,10/30epochs_weather.keras')
-    # # show_predictions()
-    # for image, mask in test_batches.take(1):
-    #     pred_mask1 = model1.predict(image)
-    #     pred_mask2 = model2.predict(image)
-    #     pred_mask3 = model3.predict(image)
-    #     display([image[0], mask[0], create_mask(pred_mask1), create_mask(pred_mask2), create_mask(pred_mask3)])
+    image_dir = 'Images/diverse_weather_data/rgb/'
+    mask_dir = 'Images/diverse_weather_data/seg/'
+    print("hi")
+    image_paths = os.listdir(image_dir)
+    mask_paths = os.listdir(mask_dir)
+    # image_paths.remove('.DS_Store')
+    image_paths.sort()
+    mask_paths.sort()
+    print(image_paths)
+    print(mask_paths)
+    path_pairs = []  # all pairs of (image, mask)
+    TOTAL_PAIRS = len(mask_paths)
+    for i in range(TOTAL_PAIRS):
+        path_pairs.append([image_paths[i], mask_paths[i]])
+    random.shuffle(path_pairs)
 
-    loss = model_history.history['loss']
-    val_loss = model_history.history['val_loss']
+    ####################################################################################
+    # 10 cross validation
+    for i in range(CV_SPLITS):
+        val_path_pairs = np.array(path_pairs[i * SPLIT_LENGTH: (i + 1) * SPLIT_LENGTH])
+        train0 = np.array(path_pairs[:i * SPLIT_LENGTH])
+        train1 = np.array(path_pairs[(i + 1) * SPLIT_LENGTH:])
+        if i == 0:
+            train_path_pairs = train1
+        elif i == CV_SPLITS - 1:
+            train_path_pairs = train0
+        else:
+            train_path_pairs = np.concatenate((train0, train1))
 
-    plt.figure()
-    plt.plot(model_history.epoch, loss, 'r', label='Training loss')
-    plt.plot(model_history.epoch, val_loss, 'bo', label='Validation loss')
-    plt.title('Training and Validation Loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss Value')
-    plt.ylim([0, 1])
-    plt.legend()
-    plt.show()
+        train_images = tf.data.Dataset.from_tensor_slices((train_path_pairs[:, 0], train_path_pairs[:, 1]))
+        train_images = train_images.map(read_image, num_parallel_calls=tf.data.AUTOTUNE).map(
+            normalize)  # only train images are augmented
+        val_images = tf.data.Dataset.from_tensor_slices((val_path_pairs[:, 0], val_path_pairs[:, 1]))
+        val_images = val_images.map(read_image, num_parallel_calls=tf.data.AUTOTUNE).map(normalize)
+
+        train_batches = (
+            train_images
+            .cache()
+            .shuffle(BUFFER_SIZE)
+            .batch(BATCH_SIZE)
+            .repeat()
+            .prefetch(buffer_size=tf.data.AUTOTUNE))
+
+        val_batches = val_images.batch(BATCH_SIZE).repeat()
+        print("train images: " + str(len(train_images)))
+        print("val images: " + str(len(val_images)))
+
+        # tf.random.set_seed(3)
+        # for images, masks in train_batches.take(3):
+        #     sample_image, sample_mask = images[0], masks[0]
+        #     display([sample_image, sample_mask])
+
+        # MAKING THE MODEL
+        base_model = tf.keras.applications.MobileNetV2(input_shape=[224, 224, 3], include_top=False)
+
+        # Use the activations of these layers
+        layer_names = [
+            'block_1_expand_relu',  # 64x64
+            'block_3_expand_relu',  # 32x32
+            'block_6_expand_relu',  # 16x16
+            'block_13_expand_relu',  # 8x8
+            'block_16_project',  # 4x4
+        ]
+        base_model_outputs = [base_model.get_layer(name).output for name in layer_names]
+
+        # Create the feature extraction model
+        down_stack = tf.keras.Model(inputs=base_model.input, outputs=base_model_outputs)
+
+        down_stack.trainable = False
+
+        up_stack = [
+            pix2pix.upsample(512, 3),  # 4x4 -> 8x8
+            pix2pix.upsample(256, 3),  # 8x8 -> 16x16
+            pix2pix.upsample(128, 3),  # 16x16 -> 32x32
+            pix2pix.upsample(64, 3),  # 32x32 -> 64x64
+            pix2pix.upsample(32, 3),  # 16x16 -> 32x32
+        ]
+
+        OUTPUT_CLASSES = 29
+
+        model = unet_model(output_channels=OUTPUT_CLASSES)
+
+        model.compile(optimizer='adam',
+                      loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+                      metrics=['accuracy'])
+
+        # tf.keras.utils.plot_model(model, show_shapes=True)
+
+        EPOCHS = 20
+        VALIDATION_STEPS = VALIDATION_LENGTH // BATCH_SIZE
+        # show_predictions()
+        model_history = model.fit(train_batches, epochs=EPOCHS,
+                                  steps_per_epoch=TRAIN_LENGTH // BATCH_SIZE,
+                                  validation_steps=VALIDATION_STEPS,
+                                  validation_data=val_batches)
+        # callbacks=[DisplayCallback()])
+        model.save('models/Towns1-7,10/20epochs_weatherCV' + str(i) + '.keras')
+
+        loss = model_history.history['loss']
+        val_loss = model_history.history['val_loss']
+
+    # plt.figure()
+    # plt.plot(model_history.epoch, loss, 'r', label='Training loss')
+    # plt.plot(model_history.epoch, val_loss, 'bo', label='Validation loss')
+    # plt.title('Training and Validation Loss')
+    # plt.xlabel('Epoch')
+    # plt.ylabel('Loss Value')
+    # plt.ylim([0, 1])
+    # plt.legend()
+    # plt.show()
 # except Exception as e:
 #     with open('log.txt', 'a') as f:
 #         f.write(str(e))

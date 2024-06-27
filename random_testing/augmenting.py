@@ -2,9 +2,10 @@ import cv2
 import numpy as np
 import random
 
-file = 'Images/CARLA/CARLA_4.png'
-src = cv2.imread(file, 1)
+# THIS IS JUST AUGMENTATION TESTING. THESE AUGMENTATIONS ARE NOT THE ONES USED
 
+file = '../Images/CARLA/CARLA_4.png'
+src = cv2.imread(file, 1)
 
 def generateNums():
     return np.random.rand(3, 3)

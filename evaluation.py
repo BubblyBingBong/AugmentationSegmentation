@@ -80,41 +80,21 @@ if True:
     BATCH_SIZE = 50
 
     # model1 = tf.keras.models.load_model('models/Towns1-7,10/50epochs.keras')
-    # images, true_masks = tuple(zip(*test_images))
-
-    model1 = tf.keras.models.load_model('models/Towns1-7,10/50epochs.keras')
-    model2 = tf.keras.models.load_model('models/Towns1-7,10/50epochs_albumentation.keras')
-    model3 = tf.keras.models.load_model('models/Towns1-7,10/50epochs_weather.keras')
-    test_set = init_dataset('Images/test_data/TNW/')
-    for image, mask in test_set.take(10):
-        pred_mask1 = model1.predict(image)
-        pred_mask2 = model2.predict(image)
-        pred_mask3 = model3.predict(image)
-        display([image[0], mask[0], create_mask(pred_mask1), create_mask(pred_mask2), create_mask(pred_mask3)])
-
-    # model = tf.keras.models.load_model('models/Towns1-7,10/50epochs_albumentation.keras')
-    # print('ALBUMENTATION CLEAR WEATHER DATA')
-    # full_eval('TDC')
-    # full_eval('TDR')
-    # full_eval('TDW')
-    # full_eval('TNC')
-    # full_eval('TNR')
-    # full_eval('TNW')
-    # full_eval('TW')
-
-    # # Predict the masks
-    # predicted_masks = model1.predict(test_batches)
-    # print(predicted_masks.shape)
-    # display([create_mask(predicted_masks[0])])
-    #
-    # # Convert predicted masks to class labels
-    # predicted_labels = [np.argmax(mask, axis=-1).flatten() for mask in predicted_masks]
-    #
-    # # Flatten true masks
-    # true_labels_flat = np.concatenate([mask.numpy().flatten() for mask in true_masks])
-    #
-    # # Flatten predicted labels
-    # predicted_labels_flat = np.concatenate(predicted_labels)
-    #
-    # # Print classification report
-    # print(classification_report(true_labels_flat, predicted_labels_flat))
+    # model2 = tf.keras.models.load_model('models/Towns1-7,10/50epochs_albumentation.keras')
+    # model3 = tf.keras.models.load_model('models/Towns1-7,10/50epochs_weather.keras')
+    # test_set = init_dataset('Images/test_data/TNW/')
+    # for image, mask in test_set.take(10):
+    #     pred_mask1 = model1.predict(image)
+    #     pred_mask2 = model2.predict(image)
+    #     pred_mask3 = model3.predict(image)
+    #     display([image[0], mask[0], create_mask(pred_mask1), create_mask(pred_mask2), create_mask(pred_mask3)])
+    for i in range(10):
+        print(i)
+        model = tf.keras.models.load_model('models/Towns1-7,10/20epochs_weatherCV' + str(i) + '.keras')
+        full_eval('TDC')
+        full_eval('TDR')
+        full_eval('TDW')
+        full_eval('TNC')
+        full_eval('TNR')
+        full_eval('TNW')
+        full_eval('TW')
